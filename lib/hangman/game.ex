@@ -142,7 +142,15 @@ Here's this module being exercised from an iex session:
 
   @spec new_game :: state
   def new_game do
-    #
+
+    random_word = Hangman.Dictionary.random_word
+
+    %{
+      word: random_word
+      word_as_list: String.codepoints(random_word)
+      characters_guessed: MapSet.new,
+      turns_left: 10
+    }
   end
 
 
@@ -153,6 +161,12 @@ Here's this module being exercised from an iex session:
   """
   @spec new_game(binary) :: state
   def new_game(word) do
+    %{
+      word: word,
+      word_as_list: String.codepoints(word),
+      characters_guessed: MapSet.new,
+      turns_left: 10
+    }
   end
 
 
@@ -178,6 +192,23 @@ Here's this module being exercised from an iex session:
 
   @spec make_move(state, ch) :: { state, atom, optional_ch }
   def make_move(state, guess) do
+    # take guessed character out of word_list
+    {correct_guess, state} = state |> pop_in([:word_as_list, guess])
+    # Subtract a turn for a wrong guess
+    state = if !correct_guess, do: %{state | turns_left: state.turns_left - 1 }, else: state
+    # Add guess to characters_guessed
+    state = %{ state | guessed: MapSet.put(state.characters_guessed, guessed)}
+
+    cond do
+      # 0 turns left
+      state.turns_left == 0 -> {state, :list, nil}
+      # Wrong guess
+      !correct_guess -> {state, :bad_guess, guess}
+      # Word as list is empty, meaning that all characters guessed, a win.
+      Enum.empty? state.word_as_list -> {state, :won, nil}
+      # Correct Guess
+      correct_guess -> {state, :good_guess, guess}
+    end
   end
 
 
@@ -188,6 +219,7 @@ Here's this module being exercised from an iex session:
   """
   @spec word_length(state) :: integer
   def word_length(%{ word: word }) do
+    String.length(word)
   end
 
   @doc """
@@ -200,6 +232,7 @@ Here's this module being exercised from an iex session:
 
   @spec letters_used_so_far(state) :: [ binary ]
   def letters_used_so_far(state) do
+    state.characters_guessed
   end
 
   @doc """
@@ -212,6 +245,7 @@ Here's this module being exercised from an iex session:
 
   @spec turns_left(state) :: integer
   def turns_left(state) do
+    state.turns_left
   end
 
   @doc """
@@ -225,6 +259,22 @@ Here's this module being exercised from an iex session:
 
   @spec word_as_string(state, boolean) :: binary
   def word_as_string(state, reveal \\ false) do
+    if reveal do
+      state.word_as_list
+      |>  Enum.join(" ")
+      |>  String.trim
+
+    else
+      Enum.map(state.word_as_list, fn(character_guessed) ->
+          if Enum.member?( state.word_as_list, character_guessed ) do
+            " " <>  character_guessed
+          else
+            " _ "
+        end
+      end)
+      |> Enum.join
+      |> String.trim
+    end
   end
 
   ###########################
